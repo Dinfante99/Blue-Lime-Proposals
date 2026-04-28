@@ -77,8 +77,7 @@ def _check_api_key(provided: str | None) -> None:
     a warning so this is loud and not a silent foot-gun.
     """
     if not API_KEY:
-        log.warning("PROPOSAL_API_KEY is not set — auth is DISABLED.")
-        return
+        raise RuntimeError("PROPOSAL_API_KEY is not set in environment.")
     if not provided or provided != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid or missing API key.")
 
@@ -106,7 +105,7 @@ async def health():
     return {
         "status": "ok",
         "time":   datetime.now(timezone.utc).isoformat(),
-        "auth":   "enabled" if API_KEY else "DISABLED",
+        "auth": bool(API_KEY),
     }
 
 
