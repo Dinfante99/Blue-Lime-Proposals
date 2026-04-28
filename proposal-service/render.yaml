@@ -1,0 +1,22 @@
+# Render deployment config.
+# Push this repo to GitHub, then in Render: New → Blueprint → connect repo.
+services:
+  - type: web
+    name: bluelime-proposal-service
+    runtime: python
+    plan: starter            # ~$7/mo — adequate for internal-team load.
+                             # Use "free" for testing (will sleep after 15min idle).
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PROPOSAL_API_KEY
+        generateValue: true   # Render generates a strong random key once
+      - key: MAX_UPLOAD_MB
+        value: "20"
+      - key: CORS_ALLOW_ORIGINS
+        value: "*"            # Tighten to your Lovable preview + prod URL
+                              # once those are known.
+      - key: PYTHON_VERSION
+        value: "3.12.7"
