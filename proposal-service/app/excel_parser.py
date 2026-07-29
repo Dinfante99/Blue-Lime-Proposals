@@ -24,6 +24,7 @@ from io import BytesIO
 from typing import Any, Optional
 
 from openpyxl import load_workbook
+from openpyxl.utils import column_index_from_string, coordinate_from_string
 from openpyxl.worksheet.worksheet import Worksheet
 
 
@@ -38,8 +39,31 @@ _PLACEHOLDER_RE = re.compile(r"^x+\s*(%|\s|deductible).*$|^x+$", re.IGNORECASE)
 # -----------------------------------------------------------------------------
 # Cell-reading utilities
 # -----------------------------------------------------------------------------
+def _is_row_hidden(ws: Worksheet, row_num: int) -> bool:
+    """True if the row is explicitly hidden in Excel."""
+    dim = ws.row_dimensions.get(row_num)
+    return dim is not None and bool(dim.hidden)
+
+
+def _is_col_hidden(ws: Worksheet, col_letter: str) -> bool:
+    """True if the column is hidden in Excel. Handles ranged column
+    dimensions (e.g., a single dim entry keyed 'D' that covers D:F)."""
+    dim = ws.column_dimensions.get(col_letter)
+    if dim is not None and dim.hidden:
+        return True
+    col_num = column_index_from_string(col_letter)
+    for dim in ws.column_dimensions.values():
+        if dim.hidden and dim.min is not None and dim.max is not None:
+            if dim.min <= col_num <= dim.max:
+                return True
+    return False
+
+
 def _cell(ws: Worksheet, coord: str) -> Any:
-    """Read a cell, return None if empty."""
+    """Read a cell, return None if empty OR if the row/column is hidden."""
+    col_letter, row_num = coordinate_from_string(coord)
+    if _is_row_hidden(ws, row_num) or _is_col_hidden(ws, col_letter):
+        return None
     v = ws[coord].value
     if v is None:
         return None
@@ -229,6 +253,11 @@ def _parse_premium_comparison(wb) -> dict:
 
     comparison_lines = []
     for label, exp_c, prop_c in rows:
+        # Skip entirely if the row is hidden on the Premium Summary tab
+        _, row_num = coordinate_from_string(exp_c)
+        if _is_row_hidden(ps, row_num):
+            continue
+
         exp_v = _cell(ps, exp_c)
         prop_v = _cell(ps, prop_c)
 
@@ -658,6 +687,11 @@ def _parse_authorization(wb) -> dict:
     ]
     policy_lines = []
     for label, coord in raw_lines:
+        # Skip entirely if the row is hidden on the Authorization tab
+        _, row_num = coordinate_from_string(coord)
+        if _is_row_hidden(auth, row_num):
+            continue
+
         v = _money(_cell(auth, coord))
         if v is None or v == 0:
             continue
